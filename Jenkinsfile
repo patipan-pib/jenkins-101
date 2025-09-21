@@ -1,71 +1,63 @@
 pipeline {
-    agent any
-    environment {
-        REGISTRY = 'your-registry.io'
-        IMAGE = "${REGISTRY}/simple-api:latest"
+  agent any
+
+  environment {
+    REPO_URL    = 'git@github.com:github.com/patipan-pib/jenkins-101.git'
+    REPO_BRANCH = 'main'
+    SSH_VM2_CRED = 'ssh-vm2'
+    SSH_VM3_CRED = 'ssh-vm3'
+    VM2_USER = 'Test'
+    VM2_HOST = '10.162.209.192'
+    VM3_USER = 'Pre'
+    VM3_HOST = '10.162.209.18'
+  }
+
+  stages {
+    stage('Unit Test on VM2') {
+      steps {
+        sshagent(credentials: ["${SSH_VM2_CRED}"]) {
+          sh """
+            ssh -o StrictHostKeyChecking=no ${VM2_USER}@${VM2_HOST} '
+              rm -rf ~/simple-api &&
+              git clone -b ${REPO_BRANCH} ${REPO_URL} ~/simple-api &&
+              cd ~/simple-api &&
+              pip3 install -r requirements.txt &&
+              pytest -q
+            '
+          """
+        }
+      }
     }
-    stages {
-        stage('Checkout') {
-            steps {
-                git branch: 'main', url: 'git@github.com:YOUR-ORG/simple-api.git'
-            }
-        }
 
-        stage('Unit Test (VM2)') {
-            steps {
-                sshagent(credentials: ['ssh-vm2']) {
-                    sh '''
-                    ssh -o StrictHostKeyChecking=no user@VM2 "
-                        rm -rf ~/simple-api && \
-                        git clone https://github.com/YOUR-ORG/simple-api.git && \
-                        cd simple-api && pytest -q
-                    "
-                    '''
-                }
-            }
+    stage('Robot Test on VM2') {
+      steps {
+        sshagent(credentials: ["${SSH_VM2_CRED}"]) {
+          sh """
+            ssh ${VM2_USER}@${VM2_HOST} '
+              rm -rf ~/simple-api-robot &&
+              git clone https://github.com/YOUR-ORG/simple-api-robot.git ~/simple-api-robot &&
+              cd ~/simple-api-robot &&
+              robot tests/
+            '
+          """
         }
-
-        stage('Build & Push Docker (VM2)') {
-            steps {
-                sshagent(credentials: ['ssh-vm2']) {
-                    sh '''
-                    ssh user@VM2 "
-                        cd ~/simple-api && \
-                        docker build -t ${IMAGE} . && \
-                        docker login -u USER -p PASS ${REGISTRY} && \
-                        docker push ${IMAGE}
-                    "
-                    '''
-                }
-            }
-        }
-
-        stage('Robot Test (VM2)') {
-            steps {
-                sshagent(credentials: ['ssh-vm2']) {
-                    sh '''
-                    ssh user@VM2 "
-                        rm -rf ~/simple-api-robot && \
-                        git clone https://github.com/YOUR-ORG/simple-api-robot.git && \
-                        cd simple-api-robot && robot tests/
-                    "
-                    '''
-                }
-            }
-        }
-
-        stage('Deploy (VM3)') {
-            steps {
-                sshagent(credentials: ['ssh-vm3']) {
-                    sh '''
-                    ssh user@VM3 "
-                        docker pull ${IMAGE} && \
-                        docker rm -f simple-api || true && \
-                        docker run -d --name simple-api -p 8080:8080 ${IMAGE}
-                    "
-                    '''
-                }
-            }
-        }
+      }
     }
+
+    stage('Deploy to VM3') {
+      steps {
+        sshagent(credentials: ["${SSH_VM3_CRED}"]) {
+          sh """
+            ssh ${VM3_USER}@${VM3_HOST} '
+              rm -rf ~/simple-api &&
+              git clone -b ${REPO_BRANCH} ${REPO_URL} ~/simple-api &&
+              cd ~/simple-api &&
+              pip3 install -r requirements.txt &&
+              nohup python3 app.py > app.log 2>&1 &
+            '
+          """
+        }
+      }
+    }
+  }
 }
