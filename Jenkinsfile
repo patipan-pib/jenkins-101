@@ -2,7 +2,7 @@ pipeline {
   agent any
 
   environment {
-    REPO_URL    = 'git@github.com:github.com/patipan-pib/jenkins-101.git'
+    REPO_URL    = 'git@github.com:patipan-pib/jenkins-101.git'
     REPO_BRANCH = 'main'
     SSH_VM2_CRED = 'ssh-vm2'
     SSH_VM3_CRED = 'ssh-vm3'
